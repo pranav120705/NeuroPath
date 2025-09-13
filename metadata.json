@@ -1,0 +1,7 @@
+{
+  "name": "Telehealth In-Home Rehabilitation",
+  "description": "A web-based platform that uses a standard webcam and pose estimation to track a patient's movements during rehabilitation exercises, calculate joint angles, and provide statistical analysis for remote review by a doctor.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
