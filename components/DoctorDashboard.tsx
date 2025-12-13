@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, Session, ExercisePreset } from '../types';
 import { getPatients, getSessionsForPatient, getExercisePresets } from '../services/apiService';
@@ -64,6 +63,16 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
   const selectedSession1 = useMemo(() => patientSessions.find(s => s.id === session1Id), [patientSessions, session1Id]);
   const canCompareWithBenchmark = !!selectedSession1?.exercisePresetId;
 
+  const exercisePresetMap = useMemo(() => {
+    const map = new Map<string, string>();
+    exercisePresets.forEach(p => {
+      if (p.id && p.name) {
+        map.set(p.id, p.name);
+      }
+    });
+    return map;
+  }, [exercisePresets]);
+
   useEffect(() => {
     if (!canCompareWithBenchmark) {
         setComparisonTarget('session');
@@ -102,6 +111,11 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
     return <div className="text-center text-gray-500 py-10">Loading dashboard...</div>;
   }
 
+  const getSessionDisplayName = (session: Session) => {
+    const exerciseName = exercisePresetMap.get(session.exercisePresetId) || 'Unknown Exercise';
+    return `${new Date(session.date).toLocaleString()} - ${exerciseName}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow">
@@ -116,7 +130,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
           <div>
             <label htmlFor="session1-select" className="block text-sm font-medium text-gray-700">Select Session</label>
             <select id="session1-select" value={session1Id} onChange={(e) => setSession1Id(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" disabled={loading.sessions || patientSessions.length === 0}>
-               {loading.sessions ? <option>Loading...</option> : patientSessions.map(s => <option key={s.id} value={s.id}>{new Date(s.date).toLocaleString()}</option>)}
+               {loading.sessions ? <option>Loading...</option> : patientSessions.map(s => <option key={s.id} value={s.id}>{getSessionDisplayName(s)}</option>)}
             </select>
           </div>
           <div>
@@ -137,7 +151,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
              <div className="mt-4">
                 <label htmlFor="session2-select" className="block text-sm font-medium text-gray-700">Select Second Session</label>
                 <select id="session2-select" value={session2Id} onChange={(e) => setSession2Id(e.target.value)} className="mt-1 block w-full md:w-1/3 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" disabled={loading.sessions || patientSessions.length === 0}>
-                    {loading.sessions ? <option>Loading...</option> : patientSessions.map(s => <option key={s.id} value={s.id}>{new Date(s.date).toLocaleString()}</option>)}
+                    {loading.sessions ? <option>Loading...</option> : patientSessions.map(s => <option key={s.id} value={s.id}>{getSessionDisplayName(s)}</option>)}
                 </select>
              </div>
          )}

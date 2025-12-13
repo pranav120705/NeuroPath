@@ -20,16 +20,16 @@ const ExerciseSession: React.FC<ExerciseSessionProps> = ({ exercise, onSessionCo
   const [status, setStatus] = useState('Loading...');
   const [countdown, setCountdown] = useState<number | null>(null);
   
-  const recordedAnglesRef = useRef({
-      leftElbow: [] as number[],
-      rightElbow: [] as number[],
-      leftKnee: [] as number[],
-      rightKnee: [] as number[],
+  const recordedAnglesRef = useRef<Session['angles']>({
+      leftElbow: [],
+      rightElbow: [],
+      leftKnee: [],
+      rightKnee: [],
   });
 
-  useEffect(() => {
-    const setup = async () => {
-      setStatus('Loading PoseNet model...');
+  const setup = async () => {
+    setStatus('Loading PoseNet model...');
+    try {
       const posenetModel = await (window as any).posenet.load({
         architecture: 'MobileNetV1',
         outputStride: 16,
@@ -38,22 +38,24 @@ const ExerciseSession: React.FC<ExerciseSessionProps> = ({ exercise, onSessionCo
       });
       setModel(posenetModel);
       setStatus('Loading webcam...');
+
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.onloadedmetadata = () => {
-                videoRef.current?.play();
-                setStatus('Ready to start session.');
-            };
-          }
-        } catch (error) {
-          console.error("Error accessing webcam:", error);
-          setStatus('Error: Could not access webcam.');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play();
+              setStatus('Ready to start session.');
+          };
         }
       }
-    };
+    } catch (error) {
+      console.error("Initialization failed:", error);
+      setStatus('Error: Could not initialize camera or model.');
+    }
+  };
+
+  useEffect(() => {
     setup();
     return () => {
       // Cleanup timers and camera stream
@@ -62,23 +64,23 @@ const ExerciseSession: React.FC<ExerciseSessionProps> = ({ exercise, onSessionCo
       if (videoRef.current && videoRef.current.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
     }
   }, []);
   
   useEffect(() => {
-    let isCancelled = false;
-
     const poseLoop = async () => {
-      if (isCancelled) return;
+      if (!model || !videoRef.current || videoRef.current.readyState < 4) {
+        animationFrameId.current = requestAnimationFrame(poseLoop);
+        return;
+      }
 
-      if (model && videoRef.current && videoRef.current.readyState >= 4) {
-        const video = videoRef.current;
-        const pose: Pose = await model.estimateSinglePose(video, { flipHorizontal: false });
+      const video = videoRef.current;
+      const pose: Pose = await model.estimateSinglePose(video, { flipHorizontal: false });
 
-        if (isCancelled || !canvasRef.current) {
-          return;
-        }
-        
+      if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
         if (ctx) {
           if (canvasRef.current.width !== video.videoWidth || canvasRef.current.height !== video.videoHeight) {
@@ -88,14 +90,16 @@ const ExerciseSession: React.FC<ExerciseSessionProps> = ({ exercise, onSessionCo
           ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
           drawPose(pose, ctx);
         }
+      }
 
-        if (isSessionActive) {
-          const angles = calculateAllAngles(pose);
-          if (angles.leftElbow) recordedAnglesRef.current.leftElbow.push(angles.leftElbow);
-          if (angles.rightElbow) recordedAnglesRef.current.rightElbow.push(angles.rightElbow);
-          if (angles.leftKnee) recordedAnglesRef.current.leftKnee.push(angles.leftKnee);
-          if (angles.rightKnee) recordedAnglesRef.current.rightKnee.push(angles.rightKnee);
-        }
+      if (isSessionActive) {
+        const angles = calculateAllAngles(pose);
+        Object.keys(angles).forEach(key => {
+            const joint = key as keyof JointAngles;
+            if(angles[joint]) {
+                recordedAnglesRef.current[joint].push(angles[joint]!);
+            }
+        });
       }
       
       animationFrameId.current = requestAnimationFrame(poseLoop);
@@ -104,8 +108,7 @@ const ExerciseSession: React.FC<ExerciseSessionProps> = ({ exercise, onSessionCo
     poseLoop();
 
     return () => {
-      isCancelled = true;
-      if (animationFrameId.current !== undefined) {
+      if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
@@ -121,17 +124,17 @@ const ExerciseSession: React.FC<ExerciseSessionProps> = ({ exercise, onSessionCo
         setCountdown(prev => {
             const newTime = (prev ?? 0) - 1;
             setStatus(`Session in progress... ${newTime > 0 ? newTime : 0}s remaining`);
+            if(newTime <= 0) {
+              handleStop();
+            }
             return newTime;
         });
     }, 1000);
-
-    sessionTimer.current = window.setTimeout(handleStop, exercise.duration * 1000);
   };
   
   const handleStop = useCallback(() => {
     setIsSessionActive(false);
     setStatus('Session complete.');
-    if (sessionTimer.current) clearTimeout(sessionTimer.current);
     if (countdownTimer.current) clearInterval(countdownTimer.current);
     setCountdown(null);
     

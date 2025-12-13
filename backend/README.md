@@ -6,8 +6,11 @@ This directory contains the Python backend for the RehabTrack application, built
 
 1.  **Create a virtual environment:**
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    python -m venv neuropath
+    # On Unix/macOS:
+    source neuropath/bin/activate
+    # On Windows:
+    neuropath\Scripts\activate
     ```
 
 2.  **Install dependencies:**
@@ -43,3 +46,13 @@ To start the FastAPI server, run the following command from the `backend` direct
 uvicorn main:app --reload
 ```
 The API will be available at `http://127.0.0.1:8000`. You can also access the interactive API documentation (Swagger UI) at `http://127.0.0.1:8000/docs`.
+
+
+Default wipes DB:
+
+RESET_DB=true python backend/seed.py
+
+
+Keep old data:
+
+RESET_DB=false python backend/seed.py
